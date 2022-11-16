@@ -108,7 +108,7 @@ def main():
 
     i = 0
     for _ in tqdm(generator()):
-        precip = 0.0001 * (z > 10)  # np.random.exponential(0.0001, size=z.shape)
+        precip = 0.001 * (z > 10)  # np.random.exponential(0.0001, size=z.shape)
         # evap = evaporation(z, h)
         # h -= evap  # substract evaporated water from surface water
         # h += precipitation(z, 10)  # add back evaporated water in form of precipitation
@@ -117,15 +117,20 @@ def main():
         active = np.abs(dh) > 0
         gx, gy = np.gradient(z - erosion)
         slope = np.sqrt(gx**2 + gy**2)
-        erosion += 0.1 * flux / (1.0 + h**2) * slope  # erosion
+        erosion += 0.1 * flux / (1 + h) * slope  # erosion
         h += dh
         h[h > 10] -= np.sum(precip) * h[h > 10] / np.sum(h[h > 10])
 
         if i % 100 == 0:
-            axes[0].set_title(f"iteration {i}: active: {np.sum(active)}, flux: {np.sum(flux):6.0f}, water mass {np.sum(h):6.0f}")
+            # axes[0].set_title(f"iteration {i}: active: {np.sum(active)}, flux: {np.sum(flux):6.0f}, water mass {np.sum(h):6.0f}")
+            axes[0].set_title("Terrain - erosion + water height")
             axes[0].imshow(z - erosion + h, vmin=0, vmax=128)
+
+            axes[1].set_title("slope")
             axes[1].imshow(slope, vmin=-10, vmax=10)
+            axes[2].set_title("Water height")
             axes[2].imshow(h, vmin=0, vmax=10)
+            axes[3].set_title("Cumulative erosion")
             axes[3].imshow(erosion, vmin=0, vmax=10)
             plt.draw()
             plt.pause(0.0001)
