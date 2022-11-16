@@ -62,7 +62,15 @@ def precipitation(z, evap):
 
 
 @njit
-def diffusion(z, h, active):
+def diffusion(z: np.ndarray, h: np.ndarray, active: np.ndarray):
+    """
+
+    :param z: terrain height
+    :param h: water height on top of terrain
+    :param active: indicates which tiles are active or not
+    :return: dh (change in water height),
+        flux (amount of water flowing away from each tile)
+    """
     dh = np.zeros_like(h)
     flux = np.zeros_like(h)
 
@@ -91,16 +99,26 @@ def diffusion(z, h, active):
     return dh, flux
 
 
+def diffuse_erode(z, h, e, active):
+    dh, flux = diffusion(z - e, h, active)  # diffuse surface water
+    active = np.abs(dh) > 0  # set active tiles for next step
+    gx, gy = np.gradient(z - e)  # get gradient
+    slope = np.sqrt(gx ** 2 + gy ** 2)  # calculate slope
+    de = 0.1 * flux / (1 + h) * slope  # calculate delta erosion
+
+    return dh, de, flux, active, slope
+
+
 def main():
     fig, axes = plt.subplots(1, 4)
 
     # z = np.array([[max(x, y) for x in range(128)] for y in range(128)], dtype=float)
-    z = generate_height_map(512, 512, 42)
-    active = np.ones_like(z, dtype=bool)
-    erosion = np.zeros_like(z)
+    z = generate_height_map(512, 512, 42)  # height field
+    active = np.ones_like(z, dtype=bool)  # active tiles
+    e = np.zeros_like(z)  # cumulative erosion field
+    # flux = np.zeros_like(z)  # water flow away from a tile
     h = -np.minimum(0.0, z)  # water height above ground
-    # precip = np.zeros_like(z)
-    # precip[80:, 100:] = 0.0001
+    precip = 0.01 * (z > 80)  # precipitation field
 
     def generator():
         while True:
@@ -108,30 +126,23 @@ def main():
 
     i = 0
     for _ in tqdm(generator()):
-        precip = 0.001 * (z > 10)  # np.random.exponential(0.0001, size=z.shape)
-        # evap = evaporation(z, h)
-        # h -= evap  # substract evaporated water from surface water
-        # h += precipitation(z, 10)  # add back evaporated water in form of precipitation
         h += precip
-        dh, flux = diffusion(z - erosion, h, active)  # diffuse surface water
-        active = np.abs(dh) > 0
-        gx, gy = np.gradient(z - erosion)
-        slope = np.sqrt(gx**2 + gy**2)
-        erosion += 0.1 * flux / (1 + h) * slope  # erosion
+        dh, de, flux, active, slope = diffuse_erode(z, h, e, active)
         h += dh
-        h[h > 10] -= np.sum(precip) * h[h > 10] / np.sum(h[h > 10])
+        e += de
+        # h[h > 10] -= np.sum(precip) * h[h > 10] / np.sum(h[h > 10])
 
         if i % 100 == 0:
             # axes[0].set_title(f"iteration {i}: active: {np.sum(active)}, flux: {np.sum(flux):6.0f}, water mass {np.sum(h):6.0f}")
-            axes[0].set_title("Terrain - erosion + water height")
-            axes[0].imshow(z - erosion + h, vmin=0, vmax=128)
+            axes[0].set_title("Terrain - e + water height")
+            axes[0].imshow(z - e + h, vmin=0, vmax=128)
 
             axes[1].set_title("slope")
             axes[1].imshow(slope, vmin=-10, vmax=10)
             axes[2].set_title("Water height")
             axes[2].imshow(h, vmin=0, vmax=10)
-            axes[3].set_title("Cumulative erosion")
-            axes[3].imshow(erosion, vmin=0, vmax=10)
+            axes[3].set_title("Cumulative e")
+            axes[3].imshow(e, vmin=0, vmax=10)
             plt.draw()
             plt.pause(0.0001)
 
