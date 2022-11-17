@@ -1,16 +1,7 @@
 # based on https://hal.inria.fr/inria-00402079/document
 
-
 import numpy as np
 from numba import njit
-from matplotlib import pyplot as plt
-from tqdm import tqdm
-
-from particle_simulation.heightmap_diffusion import generate_height_map
-
-def generator():
-    while True:
-        yield
 
 
 @njit
@@ -131,61 +122,29 @@ def update(
     return z, h, s, fL, fR, fT, fB, u, v
 
 
-def main():
-    # z = np.array(
-    #     [
-    #         [max(x, y) for x in range(32)] for y in range(64)
-    #     ],
-    #     dtype=float,
-    # )
-    z = generate_height_map(128, 128, 32)
-    z[0, :] = 200
-    z[-1, :] = 200
-    z[:, 0] = 200
-    z[:, -1] = 200
+class FastErosionEngine:
+    def __init__(self, z0, h0, r0):
+        self.z = z0
+        self.h = h0
+        self.r = r0
 
-    h = np.zeros_like(z)
-    r = np.zeros_like(z); r[100, 110] = 1
-    s = np.zeros_like(z)
-    fL = np.zeros_like(z)
-    fR = np.zeros_like(z)
-    fT = np.zeros_like(z)
-    fB = np.zeros_like(z)
-    dt = 0.1
+        self.s = np.zeros_like(z0)
 
-    fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+        self.fL = np.zeros_like(z0)
+        self.fR = np.zeros_like(z0)
+        self.fT = np.zeros_like(z0)
+        self.fB = np.zeros_like(z0)
 
-    i = 0
-    for _ in tqdm(generator()):
-        z, h, s, fL, fR, fT, fB, u, v = update(z, h, r, s, fL, fR, fT, fB, dt)
+        self.u = np.zeros_like(z0)
+        self.v = np.zeros_like(z0)
 
-        if i % 10000 == 0:
-            # print(f"iteration {i} done. water: {np.sum(h)}")
-            axes[0, 0].set_title("green=z, blue=h")
-            rgb = np.concatenate(
-                [
-                    np.zeros_like(z, dtype=np.uint8)[:, :, np.newaxis],
-                    np.clip(z[:, :, np.newaxis], 0, 255).astype(np.uint8),
-                    (255 * (h[:, :, np.newaxis] > 1)).astype(np.uint8),
-                ],
-                axis=2
-            )
-            axes[0, 0].imshow(rgb)
-            axes[0, 0].set_xlabel("x")
-            axes[0, 0].set_ylabel("y")
-
-            axes[0, 1].set_title("Water height")
-            axes[0, 1].imshow(h)
-
-            axes[1, 0].set_title("u")
-            axes[1, 0].imshow(u, vmin=-1, vmax=1)
-
-            axes[1, 1].set_title("v")
-            axes[1, 1].imshow(v, vmin=-1, vmax=1)
-            plt.draw()
-            plt.pause(0.0001)
-
-        i += 1
-
-if __name__ == "__main__":
-    main()
+    def update(self, dt):
+        (
+            self.z, self.h, self.s,
+            self.fL, self.fR, self.fT, self.fB,
+            self.u, self.v
+        ) = update(
+            self.z, self.h, self.r, self.s,
+            self.fL, self.fR, self.fT, self.fB,
+            dt,
+        )
