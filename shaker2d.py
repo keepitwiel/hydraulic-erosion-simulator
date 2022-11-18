@@ -26,49 +26,48 @@ def transport(h, H, dir, k):
     # assert h_source.shape == dH.shape
 
     dh = np.minimum(h_source, k * dH)
-    if dir == (-1, 0):
-        h[:-1, :] += dh
-        h[1:, :] -= dh
-    elif dir == (1, 0):
-        h[1:, :] += dh
-        h[:-1, :] -= dh
-    elif dir == (0, -1):
-        h[:, :-1] += dh
-        h[:, 1:] -= dh
-    elif dir == (0, 1):
-        h[:, 1:] += dh
-        h[:, :-1] -= dh
 
-    return h
+    return dh
 
 
 @njit
+def add_delta(x, dx, dir):
+    if dir == (-1, 0):
+        x[:-1, :] += dx
+        x[1:, :] -= dx
+    elif dir == (1, 0):
+        x[1:, :] += dx
+        x[:-1, :] -= dx
+    elif dir == (0, -1):
+        x[:, :-1] += dx
+        x[:, 1:] -= dx
+    elif dir == (0, 1):
+        x[:, 1:] += dx
+        x[:, :-1] -= dx
+    return x
+
+
+@njit
+def erosion(h, dh, dir):
+    if dir == (-1, 0):
+        hh = h[1:, :]
+    elif dir == (1, 0):
+        hh = h[:-1, :]
+    elif dir == (0, -1):
+        hh = h[:, 1:]
+    elif dir == (0, 1):
+        hh = h[:, :-1]
+    dz = 0.1 * dh / np.maximum(0.1, hh)
+    return dz
+
+
+# @njit
 def update(z, h, k):
     for dir in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-        # assert len(z.shape) == 2
         H = z + h
-        h = transport(h, H, dir, k)
+        dh = transport(h, H, dir, k)
+        dz = erosion(h, dh, dir)
+        h = add_delta(h, dh, dir)
+        z = add_delta(z, dz, dir)
 
     return z, h
-
-
-if __name__ == "__main__":
-    # for seed in range(10):
-    # print(f"seed: {seed}")
-    np.random.seed(42)
-    z = generate_height_map(128, 128, 42)
-    h = np.zeros_like(z)
-    h[::8, ::8] = 400.0
-
-    k = 0.99
-
-    for i in range(100000):
-        h = update(z, h, k)
-        if i % 10 == 0:
-            plt.imshow(z + h, vmin=0, vmax=100)
-            # plt.bar(x=range(len(z[::10])), bottom=z[::10], height=h[::10], width=1)
-            # plt.bar(x=range(len(z[::10])), bottom=0, height=z[::10], alpha=0.5, width=1)
-            # plt.ylim(min(z) - 5, max(z) + 5)
-            plt.draw()
-            plt.pause(0.0001)
-            plt.clf()

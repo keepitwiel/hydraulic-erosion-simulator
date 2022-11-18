@@ -53,9 +53,6 @@ for seed in range(10):
 
     h = np.zeros_like(z)
     h[::10] = 10
-    # h[len(z) // 4] = 1000.0
-    # h[len(z) // 2] = 1000.0
-    # h[len(z) // 4 + len(z) // 2] = 1000.0
 
 
     for i in range(10000):

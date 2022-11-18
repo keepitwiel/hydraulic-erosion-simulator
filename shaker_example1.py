@@ -14,14 +14,14 @@ def generator():
 
 def main():
     # define height map
-    z = generate_height_map(256, 256, 32)
+    z = generate_height_map(128, 128, 32)
 
     # define water height
     h = np.zeros_like(z)
 
     # define rainfall
     r = np.zeros_like(z)
-    r[64::128, 64::128] = 1
+    r[32::64, 32::64] = 1
 
     # define engine
     engine = ShakerEngine(z, h, k=0.1)
@@ -32,7 +32,7 @@ def main():
     i = 0
     for _ in tqdm(generator()):
         engine.update(r)
-        if i % 1000 == 0:
+        if i % 100 == 0:
             plot(axes, engine)
         i += 1
 
