@@ -14,14 +14,20 @@ def generator():
 
 def main():
     # define height map
-    z = generate_height_map(128, 128, 32)
+    z = np.array(
+        [
+            [0.1 * (y - 64)**2 + 1.0*x for x in range(256)] for y in range(128)
+        ]
+    )
+    z += np.random.normal(0, 0.1, size=z.shape)
 
     # define water height
     h = np.zeros_like(z)
+    h[60:68, 250] = 100.0
 
     # define rainfall
     r = np.zeros_like(z)
-    r[32::64, 32::64] = 1
+    # r[60:68, 255] = 0.01
 
     # define engine
     engine = ShakerEngine(z, h, k=0.1)
