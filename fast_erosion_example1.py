@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from heightmap_diffusion import generate_height_map
+from height_map import generate_height_map
 from fast_erosion_engine import FastErosionEngine
 
 
@@ -23,8 +23,7 @@ def main():
     h = np.zeros_like(z)
 
     # define rainfall
-    r = np.zeros_like(z)
-    r[100, 110] = 1
+    r = 0.01 + np.zeros_like(z)
 
     engine = FastErosionEngine(z, h, r)
     dt = 0.1
@@ -62,6 +61,7 @@ def main():
             plt.pause(0.0001)
 
         i += 1
+
 
 if __name__ == "__main__":
     main()

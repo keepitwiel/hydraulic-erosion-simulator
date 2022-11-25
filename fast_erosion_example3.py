@@ -2,7 +2,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from scipy.ndimage import gaussian_filter
-from heightmap_diffusion import generate_height_map
 from fast_erosion_engine import FastErosionEngine
 
 

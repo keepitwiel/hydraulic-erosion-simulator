@@ -1,9 +1,8 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
-from scipy.ndimage import gaussian_filter
 
-from heightmap_diffusion import generate_height_map
+from height_map import generate_height_map
 from fast_erosion_engine import FastErosionEngine
 
 
@@ -15,10 +14,10 @@ def generator():
 def main():
     # define height map
     z = generate_height_map(256, 256, 32)
-    z[0, :] = 200
-    z[-1, :] = 200
-    z[:, 0] = 200
-    z[:, -1] = 200
+    # z[0, :] = 200
+    # z[-1, :] = 200
+    # z[:, 0] = 200
+    # z[:, -1] = 200
 
     # define water height
     h = np.maximum(0, 25 - z)
@@ -52,7 +51,6 @@ def main():
 
             plt.draw()
             plt.pause(0.0001)
-            # engine.z[1:-1, 1:-1] = gaussian_filter(engine.z[1:-1, 1:-1], sigma=1)
 
 
         i += 1
