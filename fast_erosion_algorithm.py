@@ -174,15 +174,48 @@ def update(
                 s1[j, i] = s[j, i] - delta_soil
 
             # 3.4 sediment transportation
-            # eqn 14: changed this a bit so we get a nearest neighbor
-            # instead of proper interpolation
-            j1 = int((j - dt * u[j, i]) // 1)
-            i1 = int((i - dt * v[j, i]) // 1)
+            # now that we've absorbed or deposited the suspended sediment,
+            # we can transport it.
 
-            j1 = max(0, min(j1, n_x))
-            i1 = max(0, min(i1, n_y))
+            # calculate coordinates "from where the sediment is coming from".
+            # the sediment at that coordinate is the new value for
+            # sediment at (j, i).
+            j1 = j - dt * u[j, i]
+            i1 = i - dt * v[j, i]
 
-            s[j, i] = s1[j1, i1]
+            # because j1 and i1 are not integer, we need to interpolate.
+            # to do so, we calculate weights from j1, i1 to nearest neighbors.
+            #
+            #  j_lb, --------------- j_lb,
+            #  i_lb                  i_ub
+            #   |                     |
+            #   |                     |
+            #   |   x     j1, i1      |
+            #   | ----- o             |
+            #   |       |             |
+            #   |       |             |
+            #   |       | y           |
+            #   |       |             |
+            #  j_ub,    |            j_ub,
+            #  i_lb  --------------- i_ub
+
+            # calculte corner coordinates
+            j_lb = int(j1)
+            j_ub = j_lb + 1
+            i_lb = int(i1)
+            i_ub = i_lb + 1
+
+            # calculate coordinates for interpolation
+            x = j1 % 1
+            y = i1 % 1
+
+            # simple bilinear interpolation
+            s[j, i] = (
+                s1[j_lb, i_lb] * (1 - x) * (1 - y) +
+                s1[j_ub, i_lb] * x * (1 - y) +
+                s1[j_lb, i_ub] * (1 - x) * y +
+                s1[j_ub, i_ub] * x * y
+            )
 
             # 3.5 evaporation
             h[j, i] = h2[j, i] * (1 - K_e * dt)
