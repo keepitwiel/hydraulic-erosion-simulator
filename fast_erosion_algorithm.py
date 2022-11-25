@@ -33,7 +33,6 @@ def update(
     H = z + h  # surface height
 
     # auxiliary arrays - should be buffers to speed up things?
-    dvol = np.zeros_like(z)
     h1 = np.zeros_like(z)
     h2 = np.zeros_like(z)
     u = np.zeros_like(z)
@@ -45,18 +44,30 @@ def update(
     # were taken from the original paper.               #
     # the implementation here differs somewhat from the #
     # original code.                                    #
+    # ------------------------------------------------- #
+    # Practical notes:                                  #
+    # 1) We follow numpy matrix coordinate convention.  #
+    # j = horizontal coordinate. low/high = left/right  #
+    # i = vertical coordinate. low/high = top/bottom    #
+    #                                                   #
+    # 2) We don't update the edge tiles for most        #
+    # fields.                                           #
     #####################################################
 
     # 3.1 Water Increment
-    h1 = h + dt * r  # rainfall increment (eqn 1) TODO: include in loop
+    # ========================================================================
+    h1 = h + dt * r  # rainfall increment (eqn 1)
 
-    # 3.2.1 outflow flux computation
     # we put this in a separate loop because we need all
     # fluxes calculated before proceeding with calculating
     # water and sediment transportation
     for i in range(1, n_x - 1):
         for j in range(1, n_y - 1):
+
+            # 3.2.1 outflow flux computation
+            # ================================================================
             # eqn 3
+            # ----------------------------------------------------------------
             # difference in height between tile (j, i) and its neighbors.
             # this drives the initial flux calculations
             dhL = H[j, i] - H[j, i - 1]
@@ -65,7 +76,8 @@ def update(
             dhB = H[j, i] - H[j + 1, i]
 
             # eqn 2
-            # calculate flux from tile (j, i) to each neighbor.
+            # ----------------------------------------------------------------
+            # update flux from tile (j, i) to each neighbor.
             # we don't allow negative flux
             flux_factor = dt * A_PIPE / L_PIPE * G
             fL[j, i] = max(0, fL[j, i] + dhL * flux_factor)
@@ -74,26 +86,24 @@ def update(
             fB[j, i] = max(0, fB[j, i] + dhB * flux_factor)
 
             # eqn 4
-            # calculate K.
-            # K is an adjustment factor to make sure that
-            # the outflow does not lead to a "negative"
-            # water level in the tile.
+            # ----------------------------------------------------------------
+            # calculate adjustment factor.
+            # this is to make sure that the outflow does not lead to a
+            # negative water level in the tile.
             sum_f = fL[j, i] + fR[j, i] + fT[j, i] + fB[j, i]
+
             if sum_f > 0:
-                K = min(
-                    1,
-                    h1[j, i] * LX * LY / (sum_f * dt),
-                )
-            else:
-                K = 1
+                adjustment_factor = min(1, h1[j, i] * LX * LY / (sum_f * dt))
 
-            # eqn 5
-            fL[j, i] *= K
-            fR[j, i] *= K
-            fT[j, i] *= K
-            fB[j, i] *= K
+                # eqn 5. We only need to calculate this step when sum_f > 0
+                # ------------------------------------------------------------
+                fL[j, i] *= adjustment_factor
+                fR[j, i] *= adjustment_factor
+                fT[j, i] *= adjustment_factor
+                fB[j, i] *= adjustment_factor
 
-    # setting edge fluxes to 0 to prevent leaking
+    # setting edge fluxes to 0 to prevent leaking.
+    # TODO: find out if this needs to be done before eqn 5!
     fL[0, :] = 0
     fR[-1, :] = 0
     fT[:, 0] = 0
@@ -102,6 +112,7 @@ def update(
     for i in range(1, n_x - 1):
         for j in range(1, n_y - 1):
             # 3.2.2 water surface and velocity field update
+            # ================================================================
 
             # flux coming into (j, i)
             sum_f_in = (
@@ -114,19 +125,29 @@ def update(
             )
 
             # eqn 6: delta volume
-            dvol[j, i] = dt * (sum_f_in - sum_f_out)
+            # ----------------------------------------------------------------
+            dvol = dt * (sum_f_in - sum_f_out)
 
-            # eqn 7: mean water level between rainfall and outflow
-            h2[j, i] = h1[j, i] + dvol[j, i] / (LX * LY)
-            h_mean = 0.5 * (h1[j, i] + h2[j, i])
+            # eqn 7: update water height
+            # ----------------------------------------------------------------
+            dh = dvol / (LX * LY)
+            h2[j, i] = h1[j, i] + dh
 
-            # eqn 8
-            dwx = fR[j, i - 1] - fL[j, i] + fR[j, i] - fL[j, i + 1]
-            dwy = fB[j - 1, i] - fT[j, i] + fB[j, i] - fT[j + 1, i]
+            # mean water level between rainfall and outflow.
+            # TODO: do we really need mean? can't we just use h2?
+            h_mean = h1[j, i] + 0.5 * dh
 
-            # eqn 9. note that we add a conditional,
-            # otherwise we would be dividing by 0
             if h_mean > 0:
+                # we only calculate velocity if there is water, otherwise
+                # velocity should be 0
+
+                # eqn 8
+                # ----------------------------------------------------------------
+                dwx = fR[j, i - 1] - fL[j, i] + fR[j, i] - fL[j, i + 1]
+                dwy = fB[j - 1, i] - fT[j, i] + fB[j, i] - fT[j + 1, i]
+
+                # eqn 9
+                # ----------------------------------------------------------------
                 u[j, i] = dwx / LY / h_mean
                 v[j, i] = dwy / LX / h_mean
             else:
@@ -134,6 +155,7 @@ def update(
                 v[j, i] = 0
 
             # 3.3 erosion and deposition
+            # ================================================================
 
             # first, calculate (approximate) gradient
             dhdy = 0.5 * (h2[j + 1, i] - h2[j - 1, i])
@@ -143,10 +165,12 @@ def update(
             # in the direction of the gradient
             dot_product = dhdx**2 + dhdy**2
 
-            # this follows from Pythagoras
+            # Now we want to calculate the sine of the local tilt angle.
+            # this follows from Pythagoras:
             sin_local_tilt = np.sqrt(dot_product / (dot_product + 1))
 
-            # eqn 10:
+            # eqn 10
+            # ----------------------------------------------------------------
             # calculate sediment transport capacity C
             # we use a minimum of 0.15 for the slope to keep things "interesting"
             C = K_c * max(0.15, sin_local_tilt) * np.sqrt(u[j, i] ** 2 + v[j, i] ** 2)
@@ -165,6 +189,7 @@ def update(
                 # if suspended sediment exceeds capacity,
                 # deposit sediment and substract it from sediment.
                 # TODO: this can be probably be simplified so we don't need a conditional!
+                # -> would only work if K_s == K_d
                 delta_soil = K_d * (s[j, i] - C)
 
                 # eqn 12a
@@ -174,8 +199,14 @@ def update(
                 s1[j, i] = s[j, i] - delta_soil
 
             # 3.4 sediment transportation
+            # ================================================================
+
             # now that we've absorbed or deposited the suspended sediment,
             # we can transport it.
+
+            # eqn 14
+            # ----------------------------------------------------------------
+            # in short, s[j, i] = s1[j - u[j, i] * dt, i - v[j, i] * dt]
 
             # calculate coordinates "from where the sediment is coming from".
             # the sediment at that coordinate is the new value for
@@ -218,6 +249,14 @@ def update(
             )
 
             # 3.5 evaporation
+            # ================================================================
+            # eqn 15
+            # ----------------------------------------------------------------
             h[j, i] = h2[j, i] * (1 - K_e * dt)
+
+            # Not in original paper, it is however present in the code:
+            # 3.6 Heuristic to remove sharp peaks/valleys
+            # ================================================================
+            # ... TODO: implement
 
     return z, h, s, fL, fR, fT, fB, u, v

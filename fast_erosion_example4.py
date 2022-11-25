@@ -14,10 +14,6 @@ def generator():
 def main():
     # define height map
     z = generate_height_map(256, 256, 32)
-    # z[0, :] = 200
-    # z[-1, :] = 200
-    # z[:, 0] = 200
-    # z[:, -1] = 200
 
     # define water height
     h = np.maximum(0, 25 - z)
