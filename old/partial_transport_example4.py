@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 from heightmap_diffusion import generate_height_map
-from shaker_engine import ShakerEngine
+from partial_transport_engine import PartialTransportEngine
 from graphics import plot
 
 
@@ -14,23 +14,18 @@ def generator():
 
 def main():
     # define height map
-    z = np.array(
-        [
-            [0.1 * (y - 64)**2 + 1.0*x for x in range(256)] for y in range(128)
-        ]
-    )
-    z += np.random.normal(0, 0.1, size=z.shape)
+    z = generate_height_map(128, 128, 42, smoothness=0.1) / 10 + 0.5
 
     # define water height
-    h = np.zeros_like(z)
-    h[60:68, 250] = 100.0
+    h = np.maximum(0, -z)
 
     # define rainfall
     r = np.zeros_like(z)
-    # r[60:68, 255] = 0.01
-
+    r[96:100, 96:100] = 0.001
+    z[96:100, 96:100] += 100  # erosion "budget"
+    # r[0, 100:105] = 0.05
     # define engine
-    engine = ShakerEngine(z, h, k=0.1)
+    engine = PartialTransportEngine(z, h, k=0.1)
 
     # define output plot
     fig, axes = plt.subplots(2, 2, figsize=(8, 8))

@@ -62,7 +62,7 @@ def calculate_force(n_particles, x, xdot, d, rho, p, f):
         # calc pressure
         p[i] = ISOTROPIC_EXPONENT * (rho[i] - BASE_DENSITY)
 
-    # calc forces between particles and update x, xdot
+    # calc forces between particles and update u, xdot
     for i in range(n_particles):
         for j in range(n_particles):
             if i != j:

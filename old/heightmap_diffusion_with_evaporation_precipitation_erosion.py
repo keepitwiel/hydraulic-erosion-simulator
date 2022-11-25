@@ -112,8 +112,8 @@ def diffuse_erode(z, h, e, active):
 def main():
     fig, axes = plt.subplots(1, 4)
 
-    # z = np.array([[max(x, y) for x in range(128)] for y in range(128)], dtype=float)
-    z = generate_height_map(512, 512, 42)  # height field
+    # z = np.array([[max(u, y) for u in range(128)] for y in range(128)], dtype=float)
+    z = generate_height_map(128, 128, 42)  # height field
     active = np.ones_like(z, dtype=bool)  # active tiles
     e = np.zeros_like(z)  # cumulative erosion field
     # flux = np.zeros_like(z)  # water flow away from a tile
@@ -130,10 +130,10 @@ def main():
         dh, de, flux, active, slope = diffuse_erode(z, h, e, active)
         h += dh
         e += de
-        # h[h > 10] -= np.sum(precip) * h[h > 10] / np.sum(h[h > 10])
+        # h_source[h_source > 10] -= np.sum(precip) * h_source[h_source > 10] / np.sum(h_source[h_source > 10])
 
         if i % 100 == 0:
-            # axes[0].set_title(f"iteration {i}: active: {np.sum(active)}, flux: {np.sum(flux):6.0f}, water mass {np.sum(h):6.0f}")
+            # axes[0].set_title(f"iteration {i}: active: {np.sum(active)}, flux: {np.sum(flux):6.0f}, water mass {np.sum(h_source):6.0f}")
             axes[0].set_title("Terrain - e + water height")
             axes[0].imshow(z - e + h, vmin=0, vmax=128)
 

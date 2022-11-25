@@ -113,11 +113,11 @@ def update(x, xdot):
     """
     We want to update
     x_(t+1) = x_t + delta * xdot_t
-    xdot_(t+1) = xdot_t + delta * g(x_t, xdot_t)
+    xdot_(t+1) = xdot_t + delta * G(x_t, xdot_t)
 
-    What is g?
+    What is G?
 
-    (1) g = (f_p(x_t, xdot_t) + f_v(x_t, xdot_t) + f_g) / rho(x_t)
+    (1) G = (f_p(x_t, xdot_t) + f_v(x_t, xdot_t) + f_g) / rho(x_t)
 
     (2a) f'_p = f_p / rho
     (2b) f'_v = f_v / rho

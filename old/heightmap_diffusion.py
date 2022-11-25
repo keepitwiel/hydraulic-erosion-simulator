@@ -34,9 +34,8 @@ def diamond_square(p: int, smoothness: float, random_seed: int) -> np.ndarray:
     return z
 
 
-def generate_height_map(height: int, width: int, random_seed: int):
+def generate_height_map(height: int, width: int, random_seed: int, smoothness=0.6):
     max_dimension = max(height, width)
-    smoothness = 0.6
     p = np.ceil(np.log2(max_dimension)).astype(int)
     z = diamond_square(p, smoothness, random_seed)
     z_max = np.max(z)
