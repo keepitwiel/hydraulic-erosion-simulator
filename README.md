@@ -6,7 +6,7 @@ GPU](https://hal.inria.fr/inria-00402079/document).
 To run, install the appropriate packages and run one of the examples provided.
 
 You will see output similar to this:
-![This was generated using example 4](screenshot.jpg)
+![This was generated using example 4](./screenshot.png "Example")
 
 ## Engine & Algorithm
 The algorithm (src/fast_erosion_algorithm.py) was implemented from the above paper with a few additions
