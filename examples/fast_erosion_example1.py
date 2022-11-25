@@ -2,8 +2,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from height_map import generate_height_map
-from fast_erosion_engine import FastErosionEngine
+from src.height_map import generate_height_map
+from src.fast_erosion_engine import FastErosionEngine
 
 
 def generator():

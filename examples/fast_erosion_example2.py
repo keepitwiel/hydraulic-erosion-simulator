@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 
-from fast_erosion_engine import FastErosionEngine
+from src.fast_erosion_engine import FastErosionEngine
 
 
 def generator():
