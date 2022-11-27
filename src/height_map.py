@@ -1,7 +1,5 @@
 import numpy as np
 from numba import njit
-from matplotlib import pyplot as plt
-from tqdm import tqdm
 
 
 @njit
@@ -39,6 +37,8 @@ def generate_height_map(height: int, width: int, random_seed: int, smoothness=0.
     max_dimension = max(height, width)
     p = np.ceil(np.log2(max_dimension)).astype(int)
     z = diamond_square(p, smoothness, random_seed)
-    z_max = np.max(z)
-    z = z[:height, :width] / z_max * 128
+    z = z[:height, :width]
+
+    # normalize
+    z = z / (np.max(z) - np.min(z))
     return z

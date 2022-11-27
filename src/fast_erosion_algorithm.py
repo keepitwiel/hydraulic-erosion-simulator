@@ -9,7 +9,7 @@ L_PIPE = 1    # virtual pipe length
 LX = 1        # horizontal distance between grid points
 LY = 1        # vertical distance between grid points
 
-K_c = 0.1     # sediment capacity constant
+# K_c = 0.1     # sediment capacity constant
 K_s = 0.1     # dissolving constant
 K_d = 0.1     # deposition constant
 K_e = 0.01    # evaporation constant
@@ -26,6 +26,7 @@ def update(
     fT,  # flux towards top neighbor
     fB,  # flux towards bottom neighbor
     dt,  # time step
+    K_c, # sediment capacity constant
 ):
     n_x = z.shape[1]
     n_y = z.shape[0]
