@@ -3,13 +3,25 @@ import sys
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QVBoxLayout, QLabel, QSlider, QPushButton, QWidget,
+    QComboBox,
 )
 import pyqtgraph as pg
 import numpy as np
 from tqdm import tqdm
 
 from height_map import generate_height_map
-from fast_erosion_engine import FastErosionEngine
+from engine import FastErosionEngine
+
+
+class Slider(QSlider):
+    def __init__(self, alignment, minimum, maximum, tick_interval, single_step, value):
+        super().__init__(alignment)
+        self.setMaximumHeight(20)
+        self.setMinimum(minimum)
+        self.setMaximum(maximum)
+        self.setTickInterval(tick_interval)
+        self.setSingleStep(single_step)
+        self.setValue(value)
 
 
 class Widget(QWidget):
@@ -20,97 +32,75 @@ class Widget(QWidget):
         self.r0 = None
         self.seed = 42
 
-        layout_main = QHBoxLayout()
-        self.setLayout(layout_main)
+        self.layout_main = QHBoxLayout()
+        self.setLayout(self.layout_main)
+        self.layout_left = QVBoxLayout()
+        self.layout_right = QVBoxLayout()
 
-        # left column
-        layout_left = QVBoxLayout()
-        layout_right = QVBoxLayout()
+        self._init_left()
+        self._init_right()
 
+    def _init_left(self):
         # erode_button
         self.erode_button = QPushButton(text="Erode")
         self.erode_button.setMinimumHeight(100)
         self.erode_button.pressed.connect(self.erode_terrain)
-        layout_left.addWidget(self.erode_button)
+        self.layout_left.addWidget(self.erode_button)
 
         # map size slider
         map_size_label = QLabel("Map size")
         map_size_label.setMaximumHeight(20)
-        layout_left.addWidget(map_size_label)
-        self.map_size_slider = QSlider(Qt.Horizontal)
-        self.map_size_slider.setMaximumHeight(20)
-        self.map_size_slider.setMinimum(5)
-        self.map_size_slider.setMaximum(9)
-        self.map_size_slider.setTickInterval(1)
-        self.map_size_slider.setSingleStep(1)
-        self.map_size_slider.setValue(7)
-        self.map_size_slider.valueChanged.connect(self.create_terrain)
-        layout_left.addWidget(self.map_size_slider)
+        self.layout_left.addWidget(map_size_label)
+        self.map_size_slider = Slider(Qt.Horizontal, 5, 9, 1, 1, 7)
+        self.layout_left.addWidget(self.map_size_slider)
 
         # water level slider
         water_level_label = QLabel("Water level")
         water_level_label.setMaximumHeight(20)
-        layout_left.addWidget(water_level_label)
-        self.water_level_slider = QSlider(Qt.Horizontal)
-        self.water_level_slider.setMaximumHeight(20)
-        self.water_level_slider.setMinimum(-50)
-        self.water_level_slider.setMaximum(50)
-        self.water_level_slider.setValue(0)
-        self.water_level_slider.valueChanged.connect(self.update_water_level)
-        layout_left.addWidget(self.water_level_slider)
+        self.layout_left.addWidget(water_level_label)
+        self.water_level_slider = Slider(Qt.Horizontal, -50, 50, 1, 1, 0)
+        self.layout_left.addWidget(self.water_level_slider)
 
         # rainfall slider
         rainfall_label = QLabel("Rainfall")
         rainfall_label.setMaximumHeight(20)
-        layout_left.addWidget(rainfall_label)
-        self.rainfall_slider = QSlider(Qt.Horizontal)
-        self.rainfall_slider.setMaximumHeight(20)
-        self.rainfall_slider.setMinimum(-6)
-        self.rainfall_slider.setMaximum(0)
-        self.rainfall_slider.setTickInterval(1)
-        self.rainfall_slider.setSingleStep(1)
-        self.rainfall_slider.setValue(-6)
-        layout_left.addWidget(self.rainfall_slider)
+        self.layout_left.addWidget(rainfall_label)
+        self.rainfall_slider = Slider(Qt.Horizontal, -6, 0, 1, 1, -6)
+        self.layout_left.addWidget(self.rainfall_slider)
 
         # sediment capacity slider
         sediment_label = QLabel("Sediment capacity constant")
         sediment_label.setMaximumHeight(20)
-        layout_left.addWidget(sediment_label)
-        self.sediment_slider = QSlider(Qt.Horizontal)
-        self.sediment_slider.setMaximumHeight(20)
-        self.sediment_slider.setMinimum(0)
-        self.sediment_slider.setMaximum(10)
-        self.sediment_slider.setTickInterval(1)
-        self.sediment_slider.setSingleStep(1)
-        self.sediment_slider.setValue(1)
-        layout_left.addWidget(self.sediment_slider)
+        self.layout_left.addWidget(sediment_label)
+        self.sediment_slider = Slider(Qt.Horizontal, 0, 10, 2, 2, 0)
+        self.layout_left.addWidget(self.sediment_slider)
 
         # iterations slider
         iterations_label = QLabel("Number of iterations")
         iterations_label.setMaximumHeight(20)
-        layout_left.addWidget(iterations_label)
-        self.iterations_slider = QSlider(Qt.Horizontal)
-        self.iterations_slider.setMaximumHeight(20)
-        self.iterations_slider.setMinimum(0)
-        self.iterations_slider.setMaximum(1000)
-        self.iterations_slider.setTickInterval(100)
-        self.iterations_slider.setSingleStep(100)
-        self.iterations_slider.setValue(100)
-        layout_left.addWidget(self.iterations_slider)
+        self.layout_left.addWidget(iterations_label)
+        self.iterations_slider = Slider(Qt.Horizontal, 0, 1000, 100, 100, 100)
+        self.layout_left.addWidget(self.iterations_slider)
 
-        layout_main.addLayout(layout_left, stretch=1)
+        self.layout_main.addLayout(self.layout_left, stretch=1)
 
-        # right column
+    def _init_right(self):
+        # image mode dropdown
+        self.mode_box = QComboBox()
+        self.mode_box.setMaximumWidth(200)
+        self.mode_box.addItem("composite")
+        self.mode_box.addItem("water level")
+        self.mode_box.addItem("water velocity")
+        self.mode_box.addItem("terrain height")
+        self.layout_right.addWidget(self.mode_box)
+
+        # image
         self.img = pg.RawImageWidget()
         arr = np.zeros(shape=(128, 128), dtype=np.uint8)
         self.img.setImage(arr)
-        layout_right.addWidget(self.img)
+        self.layout_right.addWidget(self.img)
 
-        layout_main.addLayout(layout_right, stretch=3)
-
-        # final stuff
-        self.create_terrain()
-        self.update_water_level()
+        self.layout_main.addLayout(self.layout_right, stretch=3)
 
     def create_terrain(self):
         map_size = 2 ** self.map_size_slider.value()
