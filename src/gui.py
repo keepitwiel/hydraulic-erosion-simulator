@@ -40,6 +40,11 @@ class Widget(QWidget):
         self._init_left()
         self._init_right()
 
+        self.mode = "composite"
+
+        self.z = None
+        self.h = None
+
     def _init_left(self):
         # erode_button
         self.erode_button = QPushButton(text="Erode")
@@ -92,6 +97,7 @@ class Widget(QWidget):
         self.mode_box.addItem("water level")
         self.mode_box.addItem("water velocity")
         self.mode_box.addItem("terrain height")
+        self.mode_box.textActivated.connect(self.set_mode)
         self.layout_right.addWidget(self.mode_box)
 
         # image
@@ -101,6 +107,10 @@ class Widget(QWidget):
         self.layout_right.addWidget(self.img)
 
         self.layout_main.addLayout(self.layout_right, stretch=3)
+
+    def set_mode(self, item):
+        self.mode = item
+        self.update_image()
 
     def create_terrain(self):
         map_size = 2 ** self.map_size_slider.value()
@@ -113,11 +123,18 @@ class Widget(QWidget):
         initial_water_level = self.water_level_slider.value()
         self.h0 = np.maximum(0, initial_water_level - self.z0)
 
-    def update_composite_image(self, z, h):
-        m = 10
-        b = np.clip(h, 0, m) / m * 128
+    def update_image(self):
+        if self.z is not None and self.h is not None:
+            if self.mode == "composite":
+                self.update_composite_image()
+            elif self.mode == "water level":
+                self.update_water_image()
 
-        land = np.zeros((z.shape[0], z.shape[1], 3))
+    def update_composite_image(self):
+        m = 10
+        b = np.clip(self.h, 0, m) / m * 128
+
+        land = np.zeros((self.z.shape[0], self.z.shape[1], 3))
         land[:, :, 1] = 128 - b
 
         water = np.zeros_like(land)
@@ -126,9 +143,9 @@ class Widget(QWidget):
         imgarr = (land + water).astype(np.uint8)
         self.img.setImage(imgarr)
 
-    def update_water_image(self, z, h):
+    def update_water_image(self):
         m = 10
-        b = (np.clip(h, 0, m) / m * 255).astype(np.uint8)
+        b = (np.clip(self.h, 0, m) / m * 255).astype(np.uint8)
         self.img.setImage(b)
 
     def erode_terrain(self):
@@ -142,7 +159,9 @@ class Widget(QWidget):
         engine = FastErosionEngine(self.z0, self.h0, self.r0)
         for _ in tqdm(range(self.iterations_slider.value())):
             engine.update(dt, K_c)
-        self.update_composite_image(engine.z, engine.h)
+        self.z = engine.z
+        self.h = engine.h
+        self.update_image()
         del engine
 
 
