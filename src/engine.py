@@ -8,7 +8,7 @@
 # https://github.com/karhu/terrain-erosion/blob/master/Simulation/FluidSimulation.cpp
 
 import numpy as np
-from src.algorithm import update
+from algorithm import update
 
 
 class FastErosionEngine:
