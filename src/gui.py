@@ -14,14 +14,14 @@ from engine import FastErosionEngine
 
 
 class Slider(QSlider):
-    def __init__(self, alignment, minimum, maximum, tick_interval, single_step, value):
+    def __init__(self, alignment, minimum, maximum, step_size, initial):
         super().__init__(alignment)
         self.setMaximumHeight(20)
         self.setMinimum(minimum)
         self.setMaximum(maximum)
-        self.setTickInterval(tick_interval)
-        self.setSingleStep(single_step)
-        self.setValue(value)
+        self.setTickInterval(step_size)
+        self.setSingleStep(step_size)
+        self.setValue(initial)
 
 
 class Widget(QWidget):
@@ -51,43 +51,14 @@ class Widget(QWidget):
         self.erode_button.setMinimumHeight(100)
         self.erode_button.pressed.connect(self.erode_terrain)
         self.layout_left.addWidget(self.erode_button)
-
-        # map size slider
-        map_size_label = QLabel("Map size")
-        map_size_label.setMaximumHeight(20)
-        self.layout_left.addWidget(map_size_label)
-        self.map_size_slider = Slider(Qt.Horizontal, 5, 9, 1, 1, 7)
-        self.layout_left.addWidget(self.map_size_slider)
-
-        # water level slider
-        water_level_label = QLabel("Water level")
-        water_level_label.setMaximumHeight(20)
-        self.layout_left.addWidget(water_level_label)
-        self.water_level_slider = Slider(Qt.Horizontal, -50, 50, 1, 1, 0)
-        self.layout_left.addWidget(self.water_level_slider)
-
-        # rainfall slider
-        rainfall_label = QLabel("Rainfall")
-        rainfall_label.setMaximumHeight(20)
-        self.layout_left.addWidget(rainfall_label)
-        self.rainfall_slider = Slider(Qt.Horizontal, -6, 0, 1, 1, -6)
-        self.layout_left.addWidget(self.rainfall_slider)
-
-        # sediment capacity slider
-        sediment_label = QLabel("Sediment capacity constant")
-        sediment_label.setMaximumHeight(20)
-        self.layout_left.addWidget(sediment_label)
-        self.sediment_slider = Slider(Qt.Horizontal, 0, 10, 2, 2, 0)
-        self.layout_left.addWidget(self.sediment_slider)
-
-        # iterations slider
-        iterations_label = QLabel("Number of iterations")
-        iterations_label.setMaximumHeight(20)
-        self.layout_left.addWidget(iterations_label)
-        self.iterations_slider = Slider(Qt.Horizontal, 0, 1000, 100, 100, 100)
-        self.layout_left.addWidget(self.iterations_slider)
-
         self.layout_main.addLayout(self.layout_left, stretch=1)
+
+        self.sliders = {}
+        self._add_slider("Map size", 5, 9, 1, 7)
+        self._add_slider("Water level", -50, 50, 1, 0)
+        self._add_slider("Rainfall", -6, 0, 1, 6)
+        self._add_slider("Sediment capacity constant", 0, 10, 2, 0)
+        self._add_slider("Number of iterations", 0, 1000, 1000, 100)
 
     def _init_right(self):
         # image mode dropdown
@@ -108,19 +79,26 @@ class Widget(QWidget):
 
         self.layout_main.addLayout(self.layout_right, stretch=3)
 
+    def _add_slider(self, name, minimum, maximum, step_size, initial):
+        label = QLabel(name)
+        label.setMaximumHeight(20)
+        self.layout_left.addWidget(label)
+        self.sliders[name] = Slider(Qt.Horizontal, minimum, maximum, step_size, initial)
+        self.layout_left.addWidget(self.sliders[name])
+
     def set_mode(self, item):
         self.mode = item
         self.update_image()
 
     def create_terrain(self):
-        map_size = 2 ** self.map_size_slider.value()
+        map_size = 2 ** self.sliders["Map size"].value()
         seed = self.seed
 
         self.z0 = generate_height_map(map_size, map_size, seed) * 256
         self.update_water_level()
 
     def update_water_level(self):
-        initial_water_level = self.water_level_slider.value()
+        initial_water_level = self.sliders["Water level"].value()
         self.h0 = np.maximum(0, initial_water_level - self.z0)
 
     def update_image(self):
@@ -150,10 +128,10 @@ class Widget(QWidget):
 
     def erode_terrain(self):
         dt = 0.1
-        K_c = self.sediment_slider.value() / 10
+        K_c = self.sliders["Sediment capacity constant"].value() / 10
         self.create_terrain()
         self.update_water_level()
-        rainfall = 10 ** self.rainfall_slider.value()
+        rainfall = 10 ** self.sliders["Rainfall"].value()
         self.r0 = np.zeros_like(self.z0) + rainfall
 
         engine = FastErosionEngine(
@@ -161,7 +139,7 @@ class Widget(QWidget):
             self.h0.astype(np.float32),
             self.r0.astype(np.float32),
         )
-        for _ in tqdm(range(self.iterations_slider.value())):
+        for _ in tqdm(range(self.sliders["Number of iterations"].value())):
             engine.update(dt, K_c)
         self.z = engine.z
         self.h = engine.h
