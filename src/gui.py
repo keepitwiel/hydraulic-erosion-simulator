@@ -2,7 +2,7 @@ import sys
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QApplication, QHBoxLayout, QVBoxLayout, QLabel, QSlider, QPushButton, QWidget,
+    QApplication, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
     QComboBox,
 )
 import pyqtgraph as pg
@@ -11,17 +11,7 @@ from tqdm import tqdm
 
 from height_map import generate_height_map
 from engine import FastErosionEngine
-
-
-class Slider(QSlider):
-    def __init__(self, alignment, minimum, maximum, step_size, initial):
-        super().__init__(alignment)
-        self.setMaximumHeight(20)
-        self.setMinimum(minimum)
-        self.setMaximum(maximum)
-        self.setTickInterval(step_size)
-        self.setSingleStep(step_size)
-        self.setValue(initial)
+from gui_utils import Slider
 
 
 class Widget(QWidget):
@@ -54,11 +44,12 @@ class Widget(QWidget):
         self.layout_main.addLayout(self.layout_left, stretch=1)
 
         self.sliders = {}
-        self._add_slider("Map size", 5, 9, 1, 7)
-        self._add_slider("Water level", -50, 50, 1, 0)
-        self._add_slider("Rainfall", -6, 0, 1, 6)
-        self._add_slider("Sediment capacity constant", 0, 10, 2, 0)
-        self._add_slider("Number of iterations", 0, 1000, 1000, 100)
+        self.labels = {}
+        self._add_slider("Map size", 7, 9, 1, 8, lambda x: 2**x)
+        self._add_slider("Water level", -5, 5, 1, 0, lambda x: 10*x)
+        self._add_slider("Rainfall", -4, 0, 1, -2, lambda x: 10**x)
+        self._add_slider("Sediment capacity constant", -5, 0, 1, -5, lambda x: 10**x)
+        self._add_slider("Number of iterations", 0, 10, 1, 1, lambda x: 100*x)
 
     def _init_right(self):
         # image mode dropdown
@@ -79,11 +70,11 @@ class Widget(QWidget):
 
         self.layout_main.addLayout(self.layout_right, stretch=3)
 
-    def _add_slider(self, name, minimum, maximum, step_size, initial):
-        label = QLabel(name)
-        label.setMaximumHeight(20)
-        self.layout_left.addWidget(label)
-        self.sliders[name] = Slider(Qt.Horizontal, minimum, maximum, step_size, initial)
+    def _add_slider(self, name, minimum, maximum, step_size, initial, value_mapping):
+        self.labels[name] = QLabel(f"{name} [{value_mapping(minimum)} ... {value_mapping(maximum)}]")
+        self.labels[name].setMaximumHeight(20)
+        self.layout_left.addWidget(self.labels[name])
+        self.sliders[name] = Slider(minimum, maximum, step_size, initial, value_mapping)
         self.layout_left.addWidget(self.sliders[name])
 
     def set_mode(self, item):
@@ -91,14 +82,14 @@ class Widget(QWidget):
         self.update_image()
 
     def create_terrain(self):
-        map_size = 2 ** self.sliders["Map size"].value()
+        map_size = self.sliders["Map size"].mapped_value()
         seed = self.seed
 
         self.z0 = generate_height_map(map_size, map_size, seed) * 256
         self.update_water_level()
 
     def update_water_level(self):
-        initial_water_level = self.sliders["Water level"].value()
+        initial_water_level = self.sliders["Water level"].mapped_value()
         self.h0 = np.maximum(0, initial_water_level - self.z0)
 
     def update_image(self):
@@ -128,10 +119,10 @@ class Widget(QWidget):
 
     def erode_terrain(self):
         dt = 0.1
-        K_c = self.sliders["Sediment capacity constant"].value() / 10
+        K_c = self.sliders["Sediment capacity constant"].mapped_value()
         self.create_terrain()
         self.update_water_level()
-        rainfall = 10 ** self.sliders["Rainfall"].value()
+        rainfall = 10 ** self.sliders["Rainfall"].mapped_value()
         self.r0 = np.zeros_like(self.z0) + rainfall
 
         engine = FastErosionEngine(
@@ -139,7 +130,7 @@ class Widget(QWidget):
             self.h0.astype(np.float32),
             self.r0.astype(np.float32),
         )
-        for _ in tqdm(range(self.sliders["Number of iterations"].value())):
+        for _ in tqdm(range(self.sliders["Number of iterations"].mapped_value())):
             engine.update(dt, K_c)
         self.z = engine.z
         self.h = engine.h
