@@ -27,7 +27,7 @@ class FastErosionEngine:
         self.u = np.zeros_like(z0)
         self.v = np.zeros_like(z0)
 
-    def update(self, dt, K_c):
+    def update(self, dt, k_c):
         (
             self.z, self.h, self.s,
             self.fL, self.fR, self.fT, self.fB,
@@ -35,5 +35,5 @@ class FastErosionEngine:
         ) = update(
             self.z, self.h, self.r, self.s,
             self.fL, self.fR, self.fT, self.fB,
-            dt, K_c
+            dt, k_c
         )

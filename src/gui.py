@@ -156,7 +156,11 @@ class Widget(QWidget):
         rainfall = 10 ** self.rainfall_slider.value()
         self.r0 = np.zeros_like(self.z0) + rainfall
 
-        engine = FastErosionEngine(self.z0, self.h0, self.r0)
+        engine = FastErosionEngine(
+            self.z0.astype(np.float32),
+            self.h0.astype(np.float32),
+            self.r0.astype(np.float32),
+        )
         for _ in tqdm(range(self.iterations_slider.value())):
             engine.update(dt, K_c)
         self.z = engine.z

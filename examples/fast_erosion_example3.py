@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from tqdm import tqdm
 from scipy.ndimage import gaussian_filter
-from src.fast_erosion_engine import FastErosionEngine
+from src.engine import FastErosionEngine
 
 
 def generator():
@@ -41,7 +41,7 @@ def main():
 
     i = 0
     for _ in tqdm(generator()):
-        engine.update(dt)
+        engine.update(dt, k_c=0.1)
         engine.z[1:-1, 1:-1] = gaussian_filter(engine.z[1:-1, 1:-1], sigma=1)
 
         if i % 1 == 0:

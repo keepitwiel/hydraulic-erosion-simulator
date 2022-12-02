@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 
 from src.height_map import generate_height_map
-from src.fast_erosion_engine import FastErosionEngine
+from src.engine import FastErosionEngine
 
 
 def generator():
@@ -32,7 +32,7 @@ def main():
 
     i = 0
     for _ in tqdm(generator()):
-        engine.update(dt)
+        engine.update(dt, k_c=0.1)
 
         if i % 1000 == 0:
             # print(f"iteration {i} done. water: {np.sum(h_source)}")

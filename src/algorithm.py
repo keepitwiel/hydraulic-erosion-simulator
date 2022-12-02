@@ -9,10 +9,10 @@ L_PIPE = 1    # virtual pipe length
 LX = 1        # horizontal distance between grid points
 LY = 1        # vertical distance between grid points
 
-# K_c = 0.1     # sediment capacity constant
-K_s = 0.1     # dissolving constant
-K_d = 0.1     # deposition constant
-K_e = 0.01    # evaporation constant
+K_C = 0.1     # sediment capacity constant
+K_S = 0.1     # dissolving constant
+K_D = 0.1     # deposition constant
+K_E = 0.01    # evaporation constant
 
 
 @njit
@@ -26,7 +26,7 @@ def update(
     fT,  # flux towards top neighbor
     fB,  # flux towards bottom neighbor
     dt,  # time step
-    K_c, # sediment capacity constant
+    k_c = K_C, # sediment capacity constant
 ):
     n_x = z.shape[1]
     n_y = z.shape[0]
@@ -34,7 +34,6 @@ def update(
     H = z + h  # surface height
 
     # auxiliary arrays - should be buffers to speed up things?
-    h1 = np.zeros_like(z)
     h2 = np.zeros_like(z)
     u = np.zeros_like(z)
     v = np.zeros_like(z)
@@ -174,12 +173,12 @@ def update(
             # ----------------------------------------------------------------
             # calculate sediment transport capacity C
             # we use a minimum of 0.15 for the slope to keep things "interesting"
-            C = K_c * max(0.15, sin_local_tilt) * np.sqrt(u[j, i] ** 2 + v[j, i] ** 2)
+            C = k_c * max(0.15, sin_local_tilt) * np.sqrt(u[j, i] ** 2 + v[j, i] ** 2)
 
             if C > s[j, i]:
                 # if capacity exceeds suspended sediment,
                 # erode soil and add it to sediment
-                delta_soil = K_s * (C - s[j, i])
+                delta_soil = K_S * (C - s[j, i])
 
                 # eqn 11a
                 z[j, i] -= delta_soil
@@ -190,8 +189,8 @@ def update(
                 # if suspended sediment exceeds capacity,
                 # deposit sediment and substract it from sediment.
                 # TODO: this can be probably be simplified so we don't need a conditional!
-                # -> would only work if K_s == K_d
-                delta_soil = K_d * (s[j, i] - C)
+                # -> would only work if K_S == K_D
+                delta_soil = K_D * (s[j, i] - C)
 
                 # eqn 12a
                 z[j, i] += delta_soil
@@ -253,7 +252,7 @@ def update(
             # ================================================================
             # eqn 15
             # ----------------------------------------------------------------
-            h[j, i] = h2[j, i] * (1 - K_e * dt)
+            h[j, i] = h2[j, i] * (1 - K_E * dt)
 
             # Not in original paper, it is however present in the code:
             # 3.6 Heuristic to remove sharp peaks/valleys
