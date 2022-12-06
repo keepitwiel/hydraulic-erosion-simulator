@@ -20,7 +20,6 @@ class Widget(QWidget):
         self.z0 = None
         self.h0 = None
         self.r0 = None
-        self.seed = 42
 
         self.layout_main = QHBoxLayout()
         self.setLayout(self.layout_main)
@@ -31,25 +30,31 @@ class Widget(QWidget):
         self._init_right()
 
         self.mode = "composite"
-
-        self.z = None
-        self.h = None
+        self.engine = None
+        self.images = {}
 
     def _init_left(self):
-        # erode_button
-        self.erode_button = QPushButton(text="Erode")
-        self.erode_button.setMinimumHeight(100)
-        self.erode_button.pressed.connect(self.erode_terrain)
-        self.layout_left.addWidget(self.erode_button)
-        self.layout_main.addLayout(self.layout_left, stretch=1)
-
         self.sliders = {}
         self.labels = {}
+        self._add_slider("Random seed", 0, 255, 1, 42, lambda x: x)
         self._add_slider("Map size", 7, 9, 1, 8, lambda x: 2**x)
         self._add_slider("Water level", -5, 5, 1, 0, lambda x: 10*x)
         self._add_slider("Rainfall", -4, 0, 1, -2, lambda x: 10**x)
         self._add_slider("Sediment capacity constant", -5, 0, 1, -5, lambda x: 10**x)
         self._add_slider("Number of iterations", 0, 10, 1, 1, lambda x: 100*x)
+
+        # reset button
+        self.reset_button = QPushButton(text="Generate World")
+        self.reset_button.setMinimumHeight(100)
+        self.reset_button.pressed.connect(self.generate_world)
+        self.layout_left.addWidget(self.reset_button)
+
+        # erode_button
+        self.erode_button = QPushButton(text=f"Run simulation {self.sliders['Number of iterations'].mapped_value()} steps")
+        self.erode_button.setMinimumHeight(100)
+        self.erode_button.pressed.connect(self.erode_terrain)
+        self.layout_left.addWidget(self.erode_button)
+        self.layout_main.addLayout(self.layout_left, stretch=1)
 
     def _init_right(self):
         # image mode dropdown
@@ -79,63 +84,94 @@ class Widget(QWidget):
 
     def set_mode(self, item):
         self.mode = item
-        self.update_image()
+        self.display_image()
 
-    def create_terrain(self):
+    def display_image(self):
+        if self.mode in self.images.keys():
+            self.img.setImage(self.images[self.mode])
+        else:
+            print(f"Image mode {self.mode} not found!")
+
+    def generate_world(self):
+        """
+        Generate world and store it inside the engine.
+
+        :return: None
+        """
         map_size = self.sliders["Map size"].mapped_value()
-        seed = self.seed
+        seed = self.sliders["Random seed"].mapped_value()
 
-        self.z0 = generate_height_map(map_size, map_size, seed) * 256
-        self.update_water_level()
+        z = generate_height_map(map_size, map_size, seed) * 256
 
-    def update_water_level(self):
         initial_water_level = self.sliders["Water level"].mapped_value()
-        self.h0 = np.maximum(0, initial_water_level - self.z0)
+        h = np.maximum(0, initial_water_level - z)
 
-    def update_image(self):
-        if self.z is not None and self.h is not None:
-            if self.mode == "composite":
-                self.update_composite_image()
-            elif self.mode == "water level":
-                self.update_water_image()
+        rainfall = self.sliders["Rainfall"].mapped_value()
+        r = np.zeros_like(z) + rainfall
+
+        self.engine = FastErosionEngine(
+            z.astype(np.float32),
+            h.astype(np.float32),
+            r.astype(np.float32),
+        )
+
+        self.update_images()
+        self.display_image()
+
+    # def update_water_level(self):
+    #     initial_water_level = self.sliders["Water level"].mapped_value()
+    #     self.h0 = np.maximum(0, initial_water_level - self.z0)
+
+    def update_images(self):
+        if self.engine is not None:
+            self.update_composite_image()
+            self.update_water_image()
 
     def update_composite_image(self):
-        m = 10
-        b = np.clip(self.h, 0, m) / m * 128
+        h = self.engine.h
+        z = self.engine.z
 
-        land = np.zeros((self.z.shape[0], self.z.shape[1], 3))
-        land[:, :, 1] = 128 - b
+        grad = np.gradient(z)
+        theta = np.zeros_like(grad)
+        theta[0, :, :] = -1/np.sqrt(2)
+        theta[1, :, :] = -1/np.sqrt(2)
+
+        cosine_similarity = -(
+            np.multiply(
+                grad[0], theta[0, :, :]
+            ) + np.multiply(
+                grad[1], theta[1, :, :]
+            )
+        ) / (
+            np.sqrt(np.multiply(grad[0], grad[0]) + np.multiply(grad[1], grad[1]))
+        )
+
+        m = 10
+        b = np.clip(h, 0, m) / m * 128
+
+        sunlit = np.clip(cosine_similarity, -1, 1) * 32 * (b < 0.1)
+        land = np.zeros((z.shape[0], z.shape[1], 3))
+        land[:, :, 1] = 128 - b + sunlit
 
         water = np.zeros_like(land)
         water[:, :, 2] = b
 
         imgarr = (land + water).astype(np.uint8)
-        self.img.setImage(imgarr)
+        self.images["composite"] = imgarr
 
     def update_water_image(self):
         m = 10
-        b = (np.clip(self.h, 0, m) / m * 255).astype(np.uint8)
-        self.img.setImage(b)
+        h = (np.clip(self.engine.h, 0, m) / m * 255).astype(np.uint8)
+        self.images["water level"] = h
 
     def erode_terrain(self):
         dt = 0.1
-        K_c = self.sliders["Sediment capacity constant"].mapped_value()
-        self.create_terrain()
-        self.update_water_level()
-        rainfall = 10 ** self.sliders["Rainfall"].mapped_value()
-        self.r0 = np.zeros_like(self.z0) + rainfall
-
-        engine = FastErosionEngine(
-            self.z0.astype(np.float32),
-            self.h0.astype(np.float32),
-            self.r0.astype(np.float32),
-        )
-        for _ in tqdm(range(self.sliders["Number of iterations"].mapped_value())):
-            engine.update(dt, K_c)
-        self.z = engine.z
-        self.h = engine.h
-        self.update_image()
-        del engine
+        k_c = self.sliders["Sediment capacity constant"].mapped_value()
+        n_iters = self.sliders["Number of iterations"].mapped_value()
+        for _ in tqdm(range(n_iters)):
+            self.engine.update(dt, k_c)
+        self.update_images()
+        self.display_image()
 
 
 if __name__ == '__main__':
