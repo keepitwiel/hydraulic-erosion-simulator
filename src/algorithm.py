@@ -2,6 +2,16 @@ import numpy as np
 from numba import njit
 
 
+# this implementation is based on the paper
+# https://hal.inria.fr/inria-00402079/document
+#
+# original implementation:
+# https://github.com/Huw-man/Interactive-Erosion-Simulator-on-GPU
+
+# "alternative" implementation:
+# https://github.com/karhu/terrain-erosion/blob/master/Simulation/FluidSimulation.cpp
+
+
 # Simulation constants, mostly taken from original code
 A_PIPE = 0.6  # virtual pipe cross section
 G = 9.81      # gravitational acceleration
@@ -12,7 +22,7 @@ LY = 1        # vertical distance between grid points
 K_C = 0.1     # sediment capacity constant
 K_S = 0.1     # dissolving constant
 K_D = 0.1     # deposition constant
-K_E = 0.01    # evaporation constant
+K_E = 0.003    # evaporation constant
 
 
 @njit
@@ -38,6 +48,7 @@ def update(
     u = np.zeros_like(z)
     v = np.zeros_like(z)
     s1 = np.zeros_like(z)
+    g = np.zeros_like(z)
 
     #####################################################
     # the following section titles and equation numbers #
@@ -158,16 +169,16 @@ def update(
             # ================================================================
 
             # first, calculate (approximate) gradient
-            dhdy = 0.5 * (h2[j + 1, i] - h2[j - 1, i])
-            dhdx = 0.5 * (h2[j, i + 1] - h2[j, i - 1])
+            dzdy = 0.5 * (z[j + 1, i] - z[j - 1, i])
+            dzdx = 0.5 * (z[j, i + 1] - z[j, i - 1])
 
             # dot product will give the grade (slope magnitude per unit length)
             # in the direction of the gradient
-            dot_product = dhdx**2 + dhdy**2
+            g[j, i] = min(max(dzdx**2 + dzdy**2, -10), 10)
 
             # Now we want to calculate the sine of the local tilt angle.
             # this follows from Pythagoras:
-            sin_local_tilt = np.sqrt(dot_product / (dot_product + 1))
+            sin_local_tilt = np.sqrt(g[j, i] / (g[j, i] + 1))
 
             # eqn 10
             # ----------------------------------------------------------------
@@ -248,15 +259,25 @@ def update(
                 s1[j_ub, i_ub] * x * y
             )
 
-            # 3.5 evaporation
+            # 3.5 evaporation [OLD]
             # ================================================================
             # eqn 15
             # ----------------------------------------------------------------
-            h[j, i] = h2[j, i] * (1 - K_E * dt)
+            # h[j, i] = h2[j, i] * (1 - K_E * dt)
+
+            # 3.5 evaporation [NEW]
+            # ================================================================
+            # Instead of evaporating proportionally to the amount of water
+            # in a tile, it's probably more realistic to evaporate at a constant
+            # rate. After all, evaporation only occurs at the surface, and
+            # having more water below the surface doesn't increase evaporation.
+            # In the future, we should also take into account air humidity and
+            # air/water temperature.
+            h[j, i] = max(0, h2[j, i] - K_E * dt)
 
             # Not in original paper, it is however present in the code:
             # 3.6 Heuristic to remove sharp peaks/valleys
             # ================================================================
             # ... TODO: implement
 
-    return z, h, s, fL, fR, fT, fB, u, v
+    return z, h, s, fL, fR, fT, fB, u, v, g

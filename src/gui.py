@@ -1,6 +1,5 @@
 import sys
 
-from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QWidget,
     QComboBox,
@@ -8,10 +7,11 @@ from PyQt5.QtWidgets import (
 import pyqtgraph as pg
 import numpy as np
 from tqdm import tqdm
+from scipy.ndimage import laplace
 
 from height_map import generate_height_map
 from engine import FastErosionEngine
-from gui_utils import Slider
+from gui_utils import Slider, get_composite_image, get_terrain_height_image, get_surface_height_image
 
 
 class Widget(QWidget):
@@ -33,15 +33,18 @@ class Widget(QWidget):
         self.engine = None
         self.images = {}
 
+        self.generate_world()
+
     def _init_left(self):
         self.sliders = {}
         self.labels = {}
-        self._add_slider("Random seed", 0, 255, 1, 42, lambda x: x)
+        self._add_slider("Random seed", 0, 255, 1, 18, lambda x: x)
         self._add_slider("Map size", 7, 9, 1, 8, lambda x: 2**x)
-        self._add_slider("Water level", -5, 5, 1, 0, lambda x: 10*x)
-        self._add_slider("Rainfall", -4, 0, 1, -2, lambda x: 10**x)
-        self._add_slider("Sediment capacity constant", -5, 0, 1, -5, lambda x: 10**x)
-        self._add_slider("Number of iterations", 0, 10, 1, 1, lambda x: 100*x)
+        # self._add_slider("Water level", -5, 5, 1, 0, lambda x: 10*x)
+        self._add_slider("Rainfall", -4, 0, 1, -1, lambda x: 10**x)
+        # self._add_slider("Rainfall Height", 0, 5, 1, 5, lambda x: 25*x)
+        self._add_slider("Sediment capacity constant", -5, 0, 1, -2, lambda x: 10**x)
+        self._add_slider("Number of iterations", 0, 3, 1, 2, lambda x: 10**x)
 
         # reset button
         self.reset_button = QPushButton(text="Generate World")
@@ -62,8 +65,8 @@ class Widget(QWidget):
         self.mode_box.setMaximumWidth(200)
         self.mode_box.addItem("composite")
         self.mode_box.addItem("water level")
-        self.mode_box.addItem("water velocity")
         self.mode_box.addItem("terrain height")
+        self.mode_box.addItem("surface height")
         self.mode_box.textActivated.connect(self.set_mode)
         self.layout_right.addWidget(self.mode_box)
 
@@ -98,13 +101,15 @@ class Widget(QWidget):
 
         :return: None
         """
+        del self.engine
+
         map_size = self.sliders["Map size"].mapped_value()
         seed = self.sliders["Random seed"].mapped_value()
+        print(f"seed: {seed}")
 
         z = generate_height_map(map_size, map_size, seed) * 256
 
-        initial_water_level = self.sliders["Water level"].mapped_value()
-        h = np.maximum(0, initial_water_level - z)
+        h = np.zeros_like(z)
 
         rainfall = self.sliders["Rainfall"].mapped_value()
         r = np.zeros_like(z) + rainfall
@@ -118,51 +123,29 @@ class Widget(QWidget):
         self.update_images()
         self.display_image()
 
-    # def update_water_level(self):
-    #     initial_water_level = self.sliders["Water level"].mapped_value()
-    #     self.h0 = np.maximum(0, initial_water_level - self.z0)
-
     def update_images(self):
         if self.engine is not None:
             self.update_composite_image()
             self.update_water_image()
+            self.update_terrain_height_image()
+            self.update_surface_height_image()
 
     def update_composite_image(self):
-        h = self.engine.h
-        z = self.engine.z
-
-        grad = np.gradient(z)
-        theta = np.zeros_like(grad)
-        theta[0, :, :] = -1/np.sqrt(2)
-        theta[1, :, :] = -1/np.sqrt(2)
-
-        cosine_similarity = -(
-            np.multiply(
-                grad[0], theta[0, :, :]
-            ) + np.multiply(
-                grad[1], theta[1, :, :]
-            )
-        ) / (
-            np.sqrt(np.multiply(grad[0], grad[0]) + np.multiply(grad[1], grad[1]))
-        )
-
-        m = 10
-        b = np.clip(h, 0, m) / m * 128
-
-        sunlit = np.clip(cosine_similarity, -1, 1) * 32 * (b < 0.1)
-        land = np.zeros((z.shape[0], z.shape[1], 3))
-        land[:, :, 1] = 128 - b + sunlit
-
-        water = np.zeros_like(land)
-        water[:, :, 2] = b
-
-        imgarr = (land + water).astype(np.uint8)
+        imgarr = get_composite_image(self.engine.z, self.engine.h)
         self.images["composite"] = imgarr
 
     def update_water_image(self):
-        m = 10
+        m = 1
         h = (np.clip(self.engine.h, 0, m) / m * 255).astype(np.uint8)
         self.images["water level"] = h
+
+    def update_terrain_height_image(self):
+        imgarr = get_terrain_height_image(self.engine.z, self.engine.h)
+        self.images["terrain height"] = imgarr
+
+    def update_surface_height_image(self):
+        imgarr = get_surface_height_image(self.engine.z, self.engine.h)
+        self.images["surface height"] = imgarr
 
     def erode_terrain(self):
         dt = 0.1
@@ -170,6 +153,8 @@ class Widget(QWidget):
         n_iters = self.sliders["Number of iterations"].mapped_value()
         for _ in tqdm(range(n_iters)):
             self.engine.update(dt, k_c)
+            self.engine.z += dt * 0.001 * self.engine.g * laplace(self.engine.z)
+
         self.update_images()
         self.display_image()
 
@@ -177,6 +162,6 @@ class Widget(QWidget):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     w = Widget()
-    w.resize(1280, 720)
+    w.resize(800, 600)
     w.show()
     sys.exit(app.exec_())

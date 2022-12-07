@@ -1,12 +1,3 @@
-# this implementation is based on the paper
-# https://hal.inria.fr/inria-00402079/document
-#
-# original implementation:
-# https://github.com/Huw-man/Interactive-Erosion-Simulator-on-GPU
-
-# "alternative" implementation:
-# https://github.com/karhu/terrain-erosion/blob/master/Simulation/FluidSimulation.cpp
-
 import numpy as np
 from algorithm import update
 
@@ -26,12 +17,13 @@ class FastErosionEngine:
 
         self.u = np.zeros_like(z0)
         self.v = np.zeros_like(z0)
+        self.g = np.zeros_like(z0)
 
     def update(self, dt, k_c):
         (
             self.z, self.h, self.s,
             self.fL, self.fR, self.fT, self.fB,
-            self.u, self.v
+            self.u, self.v, self.g
         ) = update(
             self.z, self.h, self.r, self.s,
             self.fL, self.fR, self.fT, self.fB,
