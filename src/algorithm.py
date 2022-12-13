@@ -26,7 +26,7 @@ K_E = 0.003    # evaporation constant
 
 
 @njit
-def update(
+def _update(
     z,   # terrain height
     h,   # water height
     r,   # rainfall
@@ -37,6 +37,10 @@ def update(
     fB,  # flux towards bottom neighbor
     dt,  # time step
     k_c = K_C, # sediment capacity constant
+    k_s = K_S,
+    k_d = K_D,
+    k_e = K_E,
+    erosion_flag = True,
 ):
     n_x = z.shape[1]
     n_y = z.shape[0]
@@ -165,115 +169,120 @@ def update(
                 u[j, i] = 0
                 v[j, i] = 0
 
-            # 3.3 erosion and deposition
-            # ================================================================
+            if erosion_flag:
+                # 3.3 erosion and deposition
+                # ================================================================
 
-            # first, calculate (approximate) gradient
-            dzdy = 0.5 * (z[j + 1, i] - z[j - 1, i])
-            dzdx = 0.5 * (z[j, i + 1] - z[j, i - 1])
+                # first, calculate (approximate) gradient
+                dzdy = 0.5 * (z[j + 1, i] - z[j - 1, i])
+                dzdx = 0.5 * (z[j, i + 1] - z[j, i - 1])
 
-            # dot product will give the grade (slope magnitude per unit length)
-            # in the direction of the gradient
-            g[j, i] = min(max(dzdx**2 + dzdy**2, -10), 10)
+                # dot product will give the grade (slope magnitude per unit length)
+                # in the direction of the gradient
+                g[j, i] = min(max(dzdx**2 + dzdy**2, -10), 10)
 
-            # Now we want to calculate the sine of the local tilt angle.
-            # this follows from Pythagoras:
-            sin_local_tilt = np.sqrt(g[j, i] / (g[j, i] + 1))
+                # Now we want to calculate the sine of the local tilt angle.
+                # this follows from Pythagoras:
+                sin_local_tilt = np.sqrt(g[j, i] / (g[j, i] + 1))
 
-            # eqn 10
-            # ----------------------------------------------------------------
-            # calculate sediment transport capacity C
-            # we use a minimum of 0.15 for the slope to keep things "interesting"
-            C = k_c * max(0.15, sin_local_tilt) * np.sqrt(u[j, i] ** 2 + v[j, i] ** 2)
+                # eqn 10
+                # ----------------------------------------------------------------
+                # calculate sediment transport capacity C
+                # we use a minimum of 0.15 for the slope to keep things "interesting"
+                capacity = k_c * max(0.15, sin_local_tilt) * np.sqrt(u[j, i] ** 2 + v[j, i] ** 2)
 
-            if C > s[j, i]:
-                # if capacity exceeds suspended sediment,
-                # erode soil and add it to sediment
-                delta_soil = K_S * (C - s[j, i])
+                if capacity > s[j, i]:
+                    # if capacity exceeds suspended sediment,
+                    # erode soil and add it to sediment
+                    delta_soil = min(0.1, k_s * (capacity - s[j, i]))
 
-                # eqn 11a
-                z[j, i] -= delta_soil
+                    # eqn 11a
+                    z[j, i] -= delta_soil
 
-                # eqn 11b
-                s1[j, i] = s[j, i] + delta_soil
-            else:
-                # if suspended sediment exceeds capacity,
-                # deposit sediment and substract it from sediment.
-                # TODO: this can be probably be simplified so we don't need a conditional!
-                # -> would only work if K_S == K_D
-                delta_soil = K_D * (s[j, i] - C)
+                    # eqn 11b
+                    s1[j, i] = max(0, s[j, i] + delta_soil)
+                else:
+                    # if suspended sediment exceeds capacity,
+                    # deposit sediment and substract it from sediment.
+                    # TODO: this can be probably be simplified so we don't need a conditional!
+                    # -> would only work if K_S == K_D
+                    delta_soil = min(0.1, k_d * (s[j, i] - capacity))
 
-                # eqn 12a
-                z[j, i] += delta_soil
+                    # eqn 12a
+                    z[j, i] += delta_soil
 
-                # eqn 12b
-                s1[j, i] = s[j, i] - delta_soil
+                    # eqn 12b
+                    s1[j, i] = max(0, s[j, i] - delta_soil)
 
-            # 3.4 sediment transportation
-            # ================================================================
+                # 3.4 sediment transportation
+                # ================================================================
 
-            # now that we've absorbed or deposited the suspended sediment,
-            # we can transport it.
+                # now that we've absorbed or deposited the suspended sediment,
+                # we can transport it.
 
-            # eqn 14
-            # ----------------------------------------------------------------
-            # in short, s[j, i] = s1[j - u[j, i] * dt, i - v[j, i] * dt]
+                # eqn 14
+                # ----------------------------------------------------------------
+                # in short, s[j, i] = s1[j - u[j, i] * dt, i - v[j, i] * dt]
 
-            # calculate coordinates "from where the sediment is coming from".
-            # the sediment at that coordinate is the new value for
-            # sediment at (j, i).
-            j1 = j - dt * u[j, i]
-            i1 = i - dt * v[j, i]
+                # calculate coordinates "from where the sediment is coming from".
+                # the sediment at that coordinate is the new value for
+                # sediment at (j, i).
+                j1 = j - dt * u[j, i]
+                i1 = i - dt * v[j, i]
 
-            # because j1 and i1 are not integer, we need to interpolate.
-            # to do so, we calculate weights from j1, i1 to nearest neighbors.
-            #
-            #  j_lb, --------------- j_lb,
-            #  i_lb                  i_ub
-            #   |                     |
-            #   |                     |
-            #   |   x     j1, i1      |
-            #   | ----- o             |
-            #   |       |             |
-            #   |       |             |
-            #   |       | y           |
-            #   |       |             |
-            #  j_ub,    |            j_ub,
-            #  i_lb  --------------- i_ub
+                # because j1 and i1 are not integer, we need to interpolate.
+                # to do so, we calculate weights from j1, i1 to nearest neighbors.
+                #
+                #  j_lb, --------------- j_lb,
+                #  i_lb                  i_ub
+                #   |                     |
+                #   |                     |
+                #   |   x     j1, i1      |
+                #   | ----- o             |
+                #   |       |             |
+                #   |       |             |
+                #   |       | y           |
+                #   |       |             |
+                #  j_ub,    |            j_ub,
+                #  i_lb  --------------- i_ub
 
-            # calculte corner coordinates
-            j_lb = int(j1)
-            j_ub = j_lb + 1
-            i_lb = int(i1)
-            i_ub = i_lb + 1
+                # calculte corner coordinates
+                j_lb = max(0, min(int(j1), n_x - 1))
+                j_ub = j_lb + 1
+                i_lb = max(0, min(int(i1), n_y - 1))
+                i_ub = i_lb + 1
 
-            # calculate coordinates for interpolation
-            x = j1 % 1
-            y = i1 % 1
+                # calculate coordinates for interpolation
+                x = j1 % 1
+                y = i1 % 1
 
-            # simple bilinear interpolation
-            s[j, i] = (
-                s1[j_lb, i_lb] * (1 - x) * (1 - y) +
-                s1[j_ub, i_lb] * x * (1 - y) +
-                s1[j_lb, i_ub] * (1 - x) * y +
-                s1[j_ub, i_ub] * x * y
-            )
+                # simple bilinear interpolation
+                s[j, i] = min(
+                    1.0,
+                    (
+                        s1[j_lb, i_lb] * (1 - x) * (1 - y) +
+                        s1[j_ub, i_lb] * x * (1 - y) +
+                        s1[j_lb, i_ub] * (1 - x) * y +
+                        s1[j_ub, i_ub] * x * y
+                    )
+                )
 
-            # 3.5 evaporation [OLD]
-            # ================================================================
-            # eqn 15
-            # ----------------------------------------------------------------
-            # h[j, i] = h2[j, i] * (1 - K_E * dt)
+                # 3.5 evaporation [OLD]
+                # ================================================================
+                # eqn 15
+                # ----------------------------------------------------------------
+                # h[j, i] = h2[j, i] * (1 - K_E * dt)
 
-            # 3.5 evaporation [NEW]
-            # ================================================================
-            # Instead of evaporating proportionally to the amount of water
-            # in a tile, it's probably more realistic to evaporate at a constant
-            # rate. After all, evaporation only occurs at the surface, and
-            # having more water below the surface doesn't increase evaporation.
-            # In the future, we should also take into account air humidity and
-            # air/water temperature.
-            h[j, i] = max(0, h2[j, i] - K_E * dt)
+                # 3.5 evaporation [NEW]
+                # ================================================================
+                # Instead of evaporating proportionally to the amount of water
+                # in a tile, it's probably more realistic to evaporate at a constant
+                # rate. After all, evaporation only occurs at the surface, and
+                # having more water below the surface doesn't increase evaporation.
+                # In the future, we should also take into account air humidity and
+                # air/water temperature.
+
+            h[j, i] = max(0, h2[j, i] - k_e * dt)
 
             # Not in original paper, it is however present in the code:
             # 3.6 Heuristic to remove sharp peaks/valleys

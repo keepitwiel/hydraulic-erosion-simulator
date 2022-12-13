@@ -1,5 +1,5 @@
 import numpy as np
-from algorithm import update
+from algorithm import _update
 
 
 class FastErosionEngine:
@@ -19,13 +19,14 @@ class FastErosionEngine:
         self.v = np.zeros_like(z0)
         self.g = np.zeros_like(z0)
 
-    def update(self, dt, k_c):
+    def update(self, dt, k_c, k_e):
         (
             self.z, self.h, self.s,
             self.fL, self.fR, self.fT, self.fB,
             self.u, self.v, self.g
-        ) = update(
+        ) = _update(
             self.z, self.h, self.r, self.s,
             self.fL, self.fR, self.fT, self.fB,
-            dt, k_c
+            dt, k_c=k_c, k_e=k_e,
+            erosion_flag=True,
         )

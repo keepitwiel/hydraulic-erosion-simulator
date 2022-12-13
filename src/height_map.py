@@ -1,5 +1,6 @@
 import numpy as np
 from numba import njit
+from scipy.ndimage import gaussian_filter
 
 
 @njit
@@ -33,12 +34,13 @@ def diamond_square(p: int, smoothness: float, random_seed: int) -> np.ndarray:
     return z
 
 
-def generate_height_map(height: int, width: int, random_seed: int, smoothness=0.6):
+def  generate_height_map(height: int, width: int, random_seed: int, smoothness=0.6, final_blur=2.0):
     max_dimension = max(height, width)
     p = np.ceil(np.log2(max_dimension)).astype(int)
     z = diamond_square(p, smoothness, random_seed)
     z = z[:height, :width]
+    z = gaussian_filter(z, sigma=final_blur)
 
     # normalize
-    z = z / (np.max(z) - np.min(z))
+    z = (z - np.min(z)) / (np.max(z) - np.min(z))
     return z
