@@ -19,6 +19,7 @@ from gui_utils import (
     get_water_level_image,
     get_velocity_image,
     get_sediment_image,
+    get_rainfall_image,
 )
 
 
@@ -47,6 +48,7 @@ class Widget(QWidget):
         self._add_slider("Map size", 7, 9, 1, 8, lambda x: 2**x)
         self._add_slider("Random amplitude", 0, 8, 4, 4, lambda x: 2**x)
         self._add_slider("Slope amplitude", 0, 8, 4, 4, lambda x: 2**x)
+        self._add_slider("Sea level", -256, 256, 64, 0, lambda x: x)
         self._add_slider("Rainfall", -4, 2, 1, 1, lambda x: 10**x)
         self._add_slider("Sediment capacity constant", -5, 0, 1, -5, lambda x: 10**x)
         self._add_slider("Evaporation constant", -5, 0, 1, -5, lambda x: 10**x)
@@ -76,6 +78,7 @@ class Widget(QWidget):
         self.mode_box.addItem("surface height")
         self.mode_box.addItem("velocity")
         self.mode_box.addItem("sediment")
+        self.mode_box.addItem("rainfall")
         self.mode_box.textActivated.connect(self.set_mode)
         self.layout_right.addWidget(self.mode_box)
 
@@ -125,15 +128,17 @@ class Widget(QWidget):
 
         seed = self.sliders["Random seed"].mapped_value()
         map_size = self.sliders["Map size"].mapped_value()
+        sea_level = self.sliders["Sea level"].mapped_value()
         random_amplitude = self.sliders["Random amplitude"].mapped_value()
         slope_amplitude = self.sliders["Slope amplitude"].mapped_value()
         smoothness = self.sliders["Smoothness"].mapped_value()
         rainfall = self.sliders["Rainfall"].mapped_value()
 
-        self.engine = initialize_engine(seed, map_size, random_amplitude, slope_amplitude, smoothness, rainfall)
+        self.engine = initialize_engine(seed, map_size, sea_level, random_amplitude, slope_amplitude, smoothness, rainfall)
         self.engine_textbox.setPlainText(f"""\
 seed            : {seed: 3d}
 map size        : {map_size: 3d}
+sea level       : {sea_level: 3d}
 random amplitude: {random_amplitude: 3d}
 slope amplitude : {slope_amplitude: 3d}
 smoothness      : {smoothness: 3.1f}
@@ -151,6 +156,7 @@ rainfall        : {rainfall: 3.1f}
             self.images["surface height"] = get_surface_height_image(self.engine.z, self.engine.h)
             self.images["velocity"] = get_velocity_image(self.engine.h, self.engine.u, self.engine.v)
             self.images["sediment"] = get_sediment_image(self.engine.s)
+            self.images["rainfall"] = get_rainfall_image(self.engine.r)
 
     def erode_terrain(self):
         dt = self.sliders["Time delta per step"].mapped_value()

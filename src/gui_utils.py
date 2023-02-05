@@ -99,6 +99,11 @@ def get_water_level_image(z, h):
     return imgarr
 
 
+def get_rainfall_image(r):
+    imgarr = (r / np.max(r) * 255).astype(np.uint8)
+    return imgarr
+
+
 def get_velocity_image(h, u, v):
     imgarr = np.stack(
         [np.clip(u * 10, 0, 255), h * 0, np.clip(v * 10, 0, 255)],
@@ -113,16 +118,13 @@ def get_sediment_image(s):
     return rgb.astype(np.uint8)
 
 
-def initialize_engine(seed, map_size, random_amplitude, slope_amplitude, smoothness, rainfall):
+def initialize_engine(seed, map_size, sea_level, random_amplitude, slope_amplitude, smoothness, rainfall):
     z = generate_height_map(map_size, map_size, seed, smoothness) * random_amplitude
     z += np.linspace(0, 1, map_size).reshape(-1, 1).dot(np.ones(map_size).reshape(1, -1)) * slope_amplitude
     r = np.zeros_like(z)
-    h = np.zeros_like(z)
+    h = -np.minimum(0, z - sea_level)
 
-    if seed > 0:
-        r += rainfall
-    else:
-        r[map_size - 8, map_size // 2 - 4:map_size // 2 + 4] = rainfall
+    r += rainfall * z / np.max(z)
 
     engine = FastErosionEngine(
         z.astype(np.float32),
