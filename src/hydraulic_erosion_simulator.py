@@ -2,7 +2,7 @@ import numpy as np
 from algorithm import _update
 
 
-class FastErosionEngine:
+class HydraulicErosionSimulator:
     def __init__(self, z0, h0, r0):
         self.z = z0
         self.h = h0
