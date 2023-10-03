@@ -2,3 +2,5 @@ numpy
 numba
 scipy
 PyQt5
+tqdm
+matplotlib
