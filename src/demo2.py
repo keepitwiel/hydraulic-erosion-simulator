@@ -10,17 +10,11 @@ SEED = 116
 MAP_WIDTH = 64
 MAP_HEIGHT = 128
 SEA_LEVEL = 64
-RANDOM_AMPLITUDE = 16
+RANDOM_AMPLITUDE = 64
 SLOPE_AMPLITUDE = 256
-
 SMOOTHNESS = 0.6
 RAINFALL = 1.0
-N_ITERS = 1000
-DT = 0.1
-K_C = 0.1
-K_S = 0.1
-K_D = 0.1
-K_E = 0.0001
+EVAP = 0.001
 
 
 @njit
@@ -44,27 +38,26 @@ def update(z, h, dh, r, dt=0.1):
                     if total > 0:
                         delta = h_ / total * dt
                         dh[j, i] -= h_ * dt
-                        if left:
-                            dh[j, i-1] += delta
-                        if right:
-                            dh[j, i+1] += delta
-                        if up:
-                            dh[j-1, i] += delta
-                        if down:
-                            dh[j+1, i] += delta
+                        dh[j, i-1] += left * delta
+                        dh[j, i+1] += right * delta
+                        dh[j-1, i] += up * delta
+                        dh[j+1, i] += down * delta
 
         h += dh
         dh.fill(0.0)
+    h -= np.minimum(h, EVAP * dt)
+
 
 
 def main():
     z = generate_height_map(MAP_HEIGHT, MAP_WIDTH, SEED, SMOOTHNESS) * RANDOM_AMPLITUDE
     z += np.linspace(0, 1, MAP_HEIGHT).reshape(-1, 1).dot(np.ones(MAP_WIDTH).reshape(1, -1)) * SLOPE_AMPLITUDE
     z -= SEA_LEVEL
+
     r = np.zeros_like(z)
-    r[MAP_HEIGHT - 8, MAP_WIDTH // 2 - 8] = RAINFALL
-    #h = -np.minimum(0.0, z)
-    h = np.zeros_like(z)
+    r[1:MAP_HEIGHT-1, 1:MAP_WIDTH-1] = RAINFALL / (MAP_HEIGHT * MAP_WIDTH)
+    # r[MAP_HEIGHT - 8, MAP_WIDTH // 2 - 8] = RAINFALL
+    h = -np.minimum(0.0, z)
     dh = np.zeros_like(h)
 
     fig, axes = plt.subplots(1, 3)
@@ -72,10 +65,11 @@ def main():
 
     for _ in tqdm(range(1000)):
         update(z, h, dh, r)
-        axes[1].imshow(h, vmax=RAINFALL * 0.1)
-        axes[2].imshow(h)
-        axes[1].set_title(f"{np.sum(h):2.0f}")
-        plt.pause(0.001)
+        if _ % 100 == 0:
+            axes[1].imshow(h, vmax=RAINFALL * 0.1)
+            axes[1].set_title(f"Total water: {np.sum(h):2.2f}")
+            axes[2].imshow(h)
+            plt.pause(0.001)
 
 
 if __name__ == "__main__":
