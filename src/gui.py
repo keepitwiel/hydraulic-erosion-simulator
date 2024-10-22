@@ -150,12 +150,12 @@ rainfall        : {rainfall: 3.1f}
 
     def update_images(self):
         if self.engine is not None:
-            self.images["composite"] = get_composite_image(self.engine.z, self.engine.h, self.engine.u, self.engine.v)
+            self.images["composite"] = get_composite_image(self.engine.z, self.engine.h, self.engine.v, self.engine.v)
             self.images["water level"] = get_water_level_image(self.engine.z, self.engine.h)
             self.images["terrain height"] = get_terrain_height_image(self.engine.z, self.engine.h)
             self.images["surface height"] = get_surface_height_image(self.engine.z, self.engine.h)
-            self.images["velocity"] = get_velocity_image(self.engine.h, self.engine.u, self.engine.v)
-            self.images["sediment"] = get_sediment_image(self.engine.s)
+            # self.images["velocity"] = get_velocity_image(self.engine.h, self.engine.u, self.engine.v)
+            # self.images["sediment"] = get_sediment_image(self.engine.s)
             self.images["rainfall"] = get_rainfall_image(self.engine.r)
 
     def erode_terrain(self):
@@ -171,7 +171,6 @@ Evaporation constant      : {k_e}
 Number of iterations      : {n_iters}
 
 Total land volume         : {np.sum(self.engine.z):3.0f}
-Total sediment volume     : {np.sum(self.engine.s):3.0f}
 Total water volume        : {np.sum(self.engine.h):3.0f}
 """
         )

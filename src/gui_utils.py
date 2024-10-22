@@ -4,6 +4,7 @@ from PyQt5.QtWidgets import QSlider
 
 from height_map import generate_height_map
 from hydraulic_erosion_simulator import HydraulicErosionSimulator
+from new_simulator import NewSimulator
 
 
 MAX_WATER_LEVEL = 1
@@ -125,11 +126,17 @@ def initialize_engine(seed, map_size, sea_level, random_amplitude, slope_amplitu
     h = -np.minimum(0, z - sea_level)
 
     r += rainfall * z / np.max(z)
+    # r[map_size - 5, map_size // 2] += rainfall
 
-    engine = HydraulicErosionSimulator(
+    # engine = HydraulicErosionSimulator(
+    #     z.astype(np.float32),
+    #     h.astype(np.float32),
+    #     r.astype(np.float32),
+    # )
+
+    engine = NewSimulator(
         z.astype(np.float32),
         h.astype(np.float32),
         r.astype(np.float32),
     )
-
     return engine

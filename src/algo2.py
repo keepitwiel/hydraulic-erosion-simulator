@@ -49,7 +49,7 @@ def get_diff(active, H, h, v, i, j, di, dj):
     if active:
         i_ = i + di
         j_ = j + dj
-        dh = min(h[i_, j_], H[i, j] - H[i_, j_])
+        dh = min(h[i, j], H[i, j] - H[i_, j_])
         dv = v[i, j] - v[i_, j_]
     return dh, dv
 
@@ -75,7 +75,7 @@ def update_a(mh, mw, i, j, dh_left, dh_right, dh_up, dh_down, s, k, a):
 
 
 @njit
-def update(z, h, v, a_p, a_v, k, nu,dt):
+def update(z, h, v, a_p, a_v, k, nu, dt):
     mh, mw = z.shape
     H = z + h
     a_p[:, :] = 0.0
